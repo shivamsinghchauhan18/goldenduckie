@@ -1,1 +1,0 @@
-This package implements a modified pure pursuit controller that also does vehicle avoidance.
