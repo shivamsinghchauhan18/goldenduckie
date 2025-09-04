@@ -8,16 +8,7 @@ SHELL ["/bin/bash", "-lc"]
 ENV ROS_WORKSPACE=/code/catkin_ws
 WORKDIR ${ROS_WORKSPACE}
 
-# Refresh ROS repo key
-RUN apt-get update && apt-get install -y curl gnupg2 lsb-release \
- && curl -sSL "https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc" | apt-key add -
 
-# System dependencies required by packages in this repo
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ros-$ROS_DISTRO-image-geometry \
-        libyaml-cpp-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 # Create workspace structure
 RUN mkdir -p ${ROS_WORKSPACE}/src
