@@ -12,7 +12,7 @@
     <arg name="/lane_following/my_lane_filter" default="true"/>
     <arg name="/lane_following/my_ground_projection" default="true"/>
     <arg name="/lane_following/pure_pursuit_lfv" default="true"/>
-    <arg name="/lane_following/obstacle_tracking" default="true"/>
+    <arg name="/lane_following/obstacle_tracking" default="false"/>
     <arg name="obs_source" default="ground_projection/obslist_out" doc="Topic name providing ObstacleProjectedDetectionList"/>
     <arg name="/lane_following/duckiebot_detection" default="true"/>
     <arg name="/lane_following/lane_filter" default="false"/>
