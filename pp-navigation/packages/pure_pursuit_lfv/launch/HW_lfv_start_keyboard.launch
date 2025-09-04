@@ -1,0 +1,75 @@
+<launch>
+	<arg name="veh" default="$(env VEHICLE_NAME)"/>
+	<arg name="ai_trafo_mode" default="cb" doc="'cb' for colo balance only; 'both' for color balance and linear trafo"/>
+	<arg name="ai_interval" default="5" doc="interval with which the linear trafo gets updated. color balance is performed every second."/>
+	<arg name="verbose" default="false"/>
+
+	<!-- start basic args -->
+	<include file="$(find duckietown_demos)/launch/master.launch">
+		<arg name="veh" value="$(arg veh)"/>
+		<arg name="visualization" default="true" />
+		<arg name="verbose" value="$(arg verbose)"/>
+		<!-- arg name="verbose" value="$(arg verbose)" / -->
+    	<arg name="/camera/raw" default="true" />
+		<arg name="param_file_name" default="default" />
+		<arg name="line_detector_param_file_name" default="default" />
+		<arg name="anti_instagram" default="true" />
+		<arg name="ai_trafo_mode" value="$(arg ai_trafo_mode)"/>
+		<arg name="ai_interval" value="$(arg ai_interval)"/>
+		<arg name="/lane_following/stop_line_filter" default="false" /> <!-- will not every allow a transition into COORDINATION mode -->
+		<arg name="vehicle_avoidance" default="false"/>
+		<arg name="/lane_following/lane_filter" default="false"/>
+		<arg name="/lane_following/ground_projection" default="false"/>
+		<arg name="/lane_following/lane_controller" default="false"/>
+	</include>
+
+	<!-- my_ground_projection -->
+	<group>
+		<remap from="~lineseglist_in" to="line_detector_node/segment_list"/>
+		<remap from="my_ground_projection/lineseglist_out" to="ground_projection/lineseglist_out"/>
+		<remap from="my_ground_projection/obslist" to="ground_projection/obslist_out"/>
+		<remap from="my_ground_projection/obslist_in" to="ground_projection/obslist_in"/>
+		<include file="$(find my_ground_projection)/launch/ground_projection.launch">
+			<arg name="veh" value="$(arg veh)"/>
+			<arg name="param_file_name" value="default"/>
+		</include>
+	</group>
+
+	<!-- my_lane_filter -->
+	<group>
+		<remap from="lane_filter_node/segment_list" to="ground_projection/lineseglist_out"/>
+		<remap from="lane_filter_node/car_cmd" to="/$(arg veh)/car_cmd"/>
+		<include file="$(find my_lane_filter)/launch/lane_filter_node.launch">
+			<arg name="veh" value="$(arg veh)"/>
+			<arg name="param_file_name" value="default"/>
+		</include>
+	</group>
+
+	<!-- pure_pursuit_lfv -->
+	<group>
+		<remap from="pure_pursuit_controller_node/car_cmd" to="lane_controller_node/car_cmd"/>
+		<!-- <remap from="pure_pursuit_controller_node/car_cmd" to="joy_mapper_node/car_cmd"/> -->
+		<remap from="pure_pursuit_controller_node/corrected_image/compressed" to="anti_instagram_node/corrected_image/compressed"/>
+		<remap from="pure_pursuit_controller_node/segment_list" to="line_detector_node/segment_list"/>
+		<remap from="pure_pursuit_controller_node/lane_pose" to="lane_filter_node/lane_pose"/>
+		<remap from="pure_pursuit_controller_node/lineseglist_out" to="ground_projection/lineseglist_out"/>
+		<remap from="pure_pursuit_controller_node/seglist_filtered" to="lane_filter_node/seglist_filtered"/>
+		<remap from="pure_pursuit_controller_node/obslist" to="ground_projection/obslist_out"/>
+		<remap from="pure_pursuit_controller_node/detection" to="duckiebot_detection_node/detection"/>
+		<include file="$(find pure_pursuit_lfv)/launch/pure_pursuit_controller_node.launch">
+			<arg name="veh" value="$(arg veh)"/>
+			<arg name="verbose" value="$(arg verbose)"/>
+			<arg name="vehicle_avoidance" value="true"/>
+		</include>
+	</group>
+
+	<!-- duckiebot_detection -->
+	<group>
+		<remap from="duckiebot_detection_node/image" to="camera_node/image/compressed"/>
+		<remap from="duckiebot_detection_node/detection_boxes" to="ground_projection/obslist_in"/>
+		<include file="$(find duckiebot_detection)/launch/duckiebot_detection_node.launch">
+			<arg name="veh" value="$(arg veh)"/>
+			<arg name="verbose" value="$(arg verbose)"/>
+		</include>
+	</group>
+</launch>
