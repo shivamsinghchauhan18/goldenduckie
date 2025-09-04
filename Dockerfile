@@ -13,23 +13,21 @@ ARG ROS_APT_MIRROR="http://packages.ros.org/ros/ubuntu"
 ARG ROS_APT_MIRROR_ALT="http://mirror.umd.edu/ros/ubuntu"
 ## System dependencies + refresh ROS keyring to avoid GPG errors; add retries and IPv4
 RUN set -eux; \
-    echo 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99retries; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        gnupg2; \
-    mkdir -p /usr/share/keyrings; \
-    curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg; 
-RUN set -eux; \
-    UB_CODENAME=$(. /etc/os-release && echo $UBUNTU_CODENAME); \
-    echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] ${ROS_APT_MIRROR} ${UB_CODENAME} main" > /etc/apt/sources.list.d/ros1-latest.list; \
-    echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] ${ROS_APT_MIRROR_ALT} ${UB_CODENAME} main" > /etc/apt/sources.list.d/ros1-latest-alt.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        ros-$ROS_DISTRO-image-geometry \
-        libyaml-cpp-dev; \
-    rm -rf /var/lib/apt/lists/*
+        echo 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99retries; \
+        # Temporarily disable any existing ROS sources to avoid failing update before we refresh keys
+        find /etc/apt/sources.list.d -maxdepth 1 -type f -name '*ros*' -exec sed -i 's/^deb /# deb /' {} + || true; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends ca-certificates curl gnupg2; \
+        mkdir -p /usr/share/keyrings; \
+        (curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+            || curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc) \
+            | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg; \
+        UB_CODENAME=$(. /etc/os-release && echo $UBUNTU_CODENAME); \
+        echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] ${ROS_APT_MIRROR} ${UB_CODENAME} main" > /etc/apt/sources.list.d/ros1-latest.list; \
+        echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] ${ROS_APT_MIRROR_ALT} ${UB_CODENAME} main" > /etc/apt/sources.list.d/ros1-latest-alt.list; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends ros-$ROS_DISTRO-image-geometry libyaml-cpp-dev; \
+        rm -rf /var/lib/apt/lists/*
 
 
 
