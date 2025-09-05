@@ -1,0 +1,62 @@
+// PP-Navigation focused activity flow derived from pure_pursuit_lfv/launch/lfv_start.launch
+
+digraph PPNavigationFlow {
+  rankdir=TB;
+  labelloc=t;
+  label="PP-Navigation – Activity Flow (lfv_start.launch)";
+  node [shape=box, style="rounded,filled", fillcolor=white, fontname=Helvetica];
+
+  start   [shape=circle, label="start"]
+  cam     [label="camera_node\n(image/compressed)"]
+  ai      [label="anti_instagram_node\ncolor balance"]
+  ld      [label="line_detector_node\n(~corrected_image → ~segment_list)"]
+
+  // Custom GP/LF variants used by pp-navigation
+  mygp    [label="my_ground_projection/ground_projection_node\n(~lineseglist_in → ~lineseglist_out, obslist_out)"]
+  mylf    [label="my_lane_filter/lane_filter_node\n(~segment_list → ~lane_pose, seglist_filtered)"]
+
+  // Perception for obstacles
+  dbdet   [label="duckiebot_detection_node\n(image → detection, detection_boxes)"]
+  obstrk  [label="obstacle_tracking_node\n(obslist_out → obslist_tracked)"]
+  useOT   [shape=diamond, label="OBSTACLE_TRACKING?\n(arg /lane_following/obstacle_tracking)"]
+
+  // Controller and actuation
+  pp      [label="pure_pursuit_controller_node\n(inputs: corrected_image, segment_list, lane_pose, lineseglist_out, seglist_filtered, obslist)"]
+  kin     [label="kinematics_node\n(car_cmd → wheels_cmd)"]
+  motor   [label="wheels_driver_node\n(wheels_cmd)"]
+  execd   [label="wheels_cmd_executed"]
+  loop    [shape=diamond, label="Continue?"]
+
+  // Visualization (optional)
+  viz1    [label="duckiebot_visualizer", fillcolor="#f9f9f9"]
+  viz2    [label="lane_pose_visualizer_node", fillcolor="#f9f9f9"]
+
+  // Main lane following pipeline
+  start -> cam -> ai -> ld -> mygp -> mylf -> pp -> kin -> motor -> execd -> loop
+  loop -> cam [label="yes", style=dashed]
+  loop -> end [label="no"]
+
+  // Topic level hints (dotted auxiliary feeds into PP)
+  ai -> pp   [label="~corrected_image/compressed", style=dotted]
+  ld -> pp   [label="~segment_list", style=dotted]
+  mygp -> pp [label="~lineseglist_out", style=dotted]
+  mylf -> pp [label="~lane_pose, ~seglist_filtered", style=dotted]
+
+  // Obstacle perception and fusion
+  cam -> dbdet [style=dotted, label="image/compressed"]
+  dbdet -> mygp [label="~detection_boxes → ~obslist_in", style=dotted]
+  dbdet -> pp   [label="~detection (Bool)", style=dotted]
+
+  mygp -> useOT [label="obslist_out"]
+  useOT -> obstrk [label="true"]
+  useOT -> pp    [label="false\n(obslist_out)"]
+  obstrk -> pp   [label="obslist_tracked"]
+
+  // Visualization subscribers
+  mygp -> viz1   [label="lineseglist_out", style=dotted]
+  mylf -> viz2   [label="lane_pose", style=dotted]
+
+  // Notes:
+  // - pp publishes car_cmd remapped to lane_controller_node/car_cmd; kinematics_node subscribes to that.
+  // - Many topics are node-private (~); at runtime they are remapped by lfv_start.launch under /<veh>/ namespace.
+}

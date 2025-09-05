@@ -1,0 +1,121 @@
+// System architecture of Duckietown ROS stack in this repo (primary pipelines)
+// Note: Topic names use node-private (~) names as implemented; at runtime they are resolved within a vehicle namespace and remapped by launch files.
+
+digraph SystemArchitecture {
+  rankdir=LR;
+  compound=true;
+  labelloc=t;
+  label="Duckietown Core – System Architecture (perception → projection → estimation → control → actuation)";
+
+  node [shape=box, style="rounded,filled", fillcolor=white, fontname=Helvetica];
+  edge [fontname=Helvetica];
+
+  // Topics as ovals
+  node [shape=ellipse, style=filled, fillcolor="#f6f6f6", fontcolor="#333333"]
+  t_cam_raw          [label="image/raw or image/compressed"]
+  t_ai_corrected     [label="~corrected_image/compressed"]
+  t_segments_px      [label="~segment_list (pixels)"]
+  t_segments_gp      [label="~lineseglist_out (ground)"]
+  t_lane_pose        [label="~lane_pose"]
+  t_stop_line        [label="~stop_line_reading"]
+  t_car_cmd          [label="~car_cmd (Twist2DStamped)"]
+  t_wheels_cmd       [label="wheels_cmd"]
+  t_wheels_exec      [label="~wheels_cmd_executed"]
+  t_apriltags_out    [label="~apriltags_out (AprilTagsWithInfos)"]
+  t_led_detection    [label="~led_detection"]
+
+  // Reset default appearance for nodes
+  node [shape=box, style="rounded,filled", fillcolor=white]
+
+  // Camera cluster
+  subgraph cluster_camera {
+    label="Camera"; style="rounded"; color="#cccccc";
+    cam_node [label="pi_camera/camera_node\n(continuous/sequence)"]
+  }
+
+  // Perception cluster
+  subgraph cluster_perception {
+    label="Perception"; style="rounded"; color="#cccccc";
+    ai_node     [label="anti_instagram/anti_instagram_node"]
+    ld_node     [label="line_detector/line_detector_node"]
+    apr6_node   [label="apriltags_ros/apriltag_detector_node"]
+    apr2_node   [label="apriltags2_ros/continuous_detector"]
+    led_det     [label="led_detection/led_detector_node"]
+  }
+
+  // Projection cluster
+  subgraph cluster_projection {
+    label="Projection"; style="rounded"; color="#cccccc";
+    gp_node  [label="ground_projection/ground_projection_node"]
+  }
+
+  // Estimation cluster
+  subgraph cluster_estimation {
+    label="Estimation"; style="rounded"; color="#cccccc";
+    lf_node  [label="lane_filter/lane_filter_node"]
+    slf_node [label="stop_line_filter/stop_line_filter_node"]
+  }
+
+  // Control & Coordination cluster
+  subgraph cluster_control {
+    label="Control & Coordination"; style="rounded"; color="#cccccc";
+    lc_node  [label="lane_control/lane_controller_node"]
+    coord    [label="explicit_coordinator/(coordinator|simple_coordinator)_node"]
+    lps_vis  [label="lane_filter/lane_pose_visualizer_node", fillcolor="#f9f9f9"]
+    db_viz   [label="duckiebot_visualizer/visualizer", fillcolor="#f9f9f9"]
+  }
+
+  // Actuation cluster (downstream, not all nodes exist in this repo; shown for completeness)
+  subgraph cluster_actuation {
+    label="Actuation (external/runtime)"; style="rounded"; color="#cccccc";
+    kin_node [label="kinematics_node (car_cmd→wheels_cmd)"]
+    wd_node  [label="wheels_driver_node"]
+  }
+
+  // Edges: Camera → Perception
+  cam_node -> t_cam_raw
+  t_cam_raw -> ai_node        [label="remap: ~uncorrected_image/compressed"]
+  ai_node   -> t_ai_corrected
+  t_ai_corrected -> ld_node   [label="~corrected_image/compressed"]
+
+  // Line detection → Projection → Estimation
+  ld_node   -> t_segments_px  [label="~segment_list"]
+  t_segments_px -> gp_node    [label="~lineseglist_in"]
+  gp_node   -> t_segments_gp  
+  t_segments_gp -> lf_node    [label="~segment_list"]
+
+  // Estimation outputs
+  lf_node   -> t_lane_pose
+  t_segments_gp -> slf_node   [label="~segment_list"]
+  t_lane_pose   -> slf_node   [label="~lane_pose"]
+  slf_node -> t_stop_line
+
+  // Control loop
+  t_lane_pose -> lc_node      [label="~lane_pose"]
+  t_stop_line -> lc_node      [label="~stop_line_reading"]
+  lc_node -> t_car_cmd
+  t_car_cmd -> lf_node        [label="~car_cmd (for velocity)"]
+
+  // Actuation
+  t_car_cmd -> kin_node
+  kin_node  -> t_wheels_cmd
+  t_wheels_cmd -> wd_node
+  wd_node -> t_wheels_exec
+  t_wheels_exec -> lc_node
+
+  // AprilTags perception and coordination
+  t_cam_raw -> apr6_node
+  t_cam_raw -> apr2_node
+  apr6_node -> t_apriltags_out
+  apr2_node -> t_apriltags_out
+  t_apriltags_out -> coord
+
+  // LED detection feeding coordinator
+  t_cam_raw -> led_det        [label="(via preprocessing)"]
+  led_det -> t_led_detection
+  t_led_detection -> coord    [label="~signals_detection"]
+
+  // Visualization (subscribes)
+  t_segments_gp -> db_viz     [label="segment_list"]
+  t_lane_pose   -> lps_vis    [label="~lane_pose"]
+}
